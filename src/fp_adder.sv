@@ -6,8 +6,21 @@ module fp_adder (
     output logic [7:0] status   // Status flags
 );
 
-// Floating point number sign calculation stage
-logic sign;
-assign sign = (a[31] == b[31]) ? a[31] : ((a[30:0] > b[30:0]) ? a[31] : b[31]);
+    // Floating point number sign calculation stage
+    logic sign;
+    assign sign = (a[31] == b[31]) ? a[31] : ((a[30:0] > b[30:0]) ? a[31] : b[31]);
+
+    // Exponent calculation stage
+    logic [7:0] max_exp;
+    logic [8:0] exp_diff;
+    logic sign_exp_diff;
+
+    exponent_calc u_exp_calc (
+        .exp_a(a[30:23]),
+        .exp_b(b[30:23]),
+        .max_exp(max_exp),
+        .exp_diff(exp_diff),
+        .sign_exp_diff(sign_exp_diff)
+    );
 
 endmodule
