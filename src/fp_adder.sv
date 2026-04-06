@@ -5,7 +5,6 @@ module fp_adder (
     output logic [31:0] result, // Floating point result
     output logic [7:0] status   // Status flags
 );
-
     // Floating point number sign calculation stage
     logic sign;
     assign sign = (a[31] == b[31]) ? a[31] : ((a[30:0] > b[30:0]) ? a[31] : b[31]);
@@ -21,6 +20,19 @@ module fp_adder (
         .max_exp(max_exp),
         .exp_diff(exp_diff),
         .sign_exp_diff(sign_exp_diff)
+    );
+ 
+    // Mantissa calculation stage
+    logic [27:0] result_mant;
+
+    mantissa_calc u_mant_calc (
+        .exp_diff(exp_diff),
+        .mant_a({1'b1, a[22:0]}),   // Implicit leading 1
+        .mant_b({1'b1, b[22:0]}),   // Implicit leading 1
+        .sign_exp_diff(sign_exp_diff),
+        .sa(a[31]),
+        .sb(b[31]),
+        .result_mant(result_mant)
     );
 
 endmodule

@@ -5,7 +5,6 @@ module exponent_calc (
     output logic [8:0] exp_diff,    // Difference between the two exponents (9 bits to accommodate negative values)
     output logic sign_exp_diff      // Sign of the exponent difference (1 if exp_a > exp_b, 0 otherwise)
 );
-
     assign sign_exp_diff = (exp_a > exp_b);
     assign max_exp       = sign_exp_diff ? exp_a : exp_b;
     assign exp_diff      = {1'b0, exp_a} - {1'b0, exp_b};
