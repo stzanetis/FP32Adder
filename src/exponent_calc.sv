@@ -7,6 +7,6 @@ module exponent_calc (
 );
     assign sign_exp_diff = (exp_a > exp_b);
     assign max_exp       = sign_exp_diff ? exp_a : exp_b;
-    assign exp_diff      = {1'b0, exp_a} - {1'b0, exp_b};
+    assign exp_diff      = sign_exp_diff ? ({1'b0, exp_a} - {1'b0, exp_b}) : ({1'b0, exp_b} - {1'b0, exp_a});
 
 endmodule

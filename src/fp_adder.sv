@@ -52,7 +52,7 @@ module fp_adder (
 
     round_adder u_round_adder (
         .round(round),
-        .norm_mant(norm_mant[25:0]),
+        .norm_mant(norm_mant),
         .z_sign(sign),
         .rounded_mant(rounded_mant),
         .inexact_bit(inexact_bit)

@@ -25,8 +25,15 @@ module norm_adder (
             norm_exp = {1'b0, max_exp};
         end else begin
             // Result < 1: Left shift.
-            norm_mant = result_mant[26:0] << (leading_zeroes - 1);
-            norm_exp = {1'b0, max_exp} - (leading_zeroes - 1);
+            logic [4:0] shift_amt;
+            shift_amt = leading_zeroes - 1;
+            norm_mant = result_mant[26:0] << shift_amt;
+            
+            // Protect against exponent underflow wrapping
+            if ({1'b0, max_exp} > {4'b0, shift_amt})
+                norm_exp = {1'b0, max_exp} - {4'b0, shift_amt};
+            else
+                norm_exp = 9'd0; 
         end
     end
 

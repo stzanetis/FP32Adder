@@ -7,7 +7,7 @@ module mantissa_calc (
     output logic [27:0] result_mant      // Resulting mantissa after alignment and addition
 );
     logic [8:0] d;
-    assign d = sign_exp_diff ? exp_diff : -exp_diff;
+    assign d = exp_diff;
 
     logic [23:0] mant_larger;
     logic [23:0] mant_smaller;

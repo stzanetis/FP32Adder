@@ -1,6 +1,6 @@
 module round_adder import round_pkg::*; (
     input round_mode round,             // Rounding mode
-    input logic [25:0] norm_mant,       // Normalized mantissa (including guard, round, and sticky bits)
+    input logic [26:0] norm_mant,       // Normalized mantissa (including guard, round, and sticky bits)
     input logic z_sign,                 // Zero sign (1 if the result is zero and should be negative, 0 otherwise)
 
     output logic [24:0] rounded_mant,   // Rounded mantissa (including implicit leading 1 and overflow bit)
