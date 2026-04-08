@@ -46,4 +46,16 @@ module fp_adder (
         .norm_mant(norm_mant)
     );
 
+    // Rounding stage
+    logic [24:0] rounded_mant;
+    logic inexact_bit;
+
+    round_adder u_round_adder (
+        .round(round_mode_e'(round)),
+        .norm_mant(norm_mant[25:0]),
+        .z_sign(sign),
+        .rounded_mant(rounded_mant),
+        .inexact_bit(inexact_bit)
+    );
+
 endmodule
