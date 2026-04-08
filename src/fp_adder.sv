@@ -51,11 +51,60 @@ module fp_adder (
     logic inexact_bit;
 
     round_adder u_round_adder (
-        .round(round_mode_e'(round)),
+        .round(round),
         .norm_mant(norm_mant[25:0]),
         .z_sign(sign),
         .rounded_mant(rounded_mant),
         .inexact_bit(inexact_bit)
     );
+
+    // Post-round normalization stage
+    logic [8:0] final_exp;
+    logic [22:0] final_fraction;
+
+    always_comb begin
+        if (rounded_mant[24]) begin
+            // Overflow in rounding, shift right by 1
+            final_fraction = rounded_mant[23:1];
+            final_exp = norm_exp + 9'd1;
+        end else begin
+            final_fraction = rounded_mant[22:0];
+            final_exp = norm_exp;
+        end
+    end
+
+    logic overflow_flag;
+    logic underflow_flag;
+
+    // Overflow occurs if the exponent reaches 255 or above (since 255 is reserved for Inf/NaN) and is positive (bit 8 is 0)
+    assign overflow_flag = (final_exp >= 9'd255) && (final_exp[8] == 1'b0);
+
+    // Underflow occurs if the exponent is <= 0. Since final_exp is 9 bits, bit 8 indicates a negative number in 2's complement.
+    assign underflow_flag = (final_exp == 9'd0) || (final_exp[8] == 1'b1);
+
+    logic [31:0] z_calc;
+    assign z_calc = {sign, final_exp[7:0], final_fraction};
+
+    // Exception handling stage
+    logic zero_f, inf_f, nan_f, tiny_f, huge_f, inexact_f;
+
+    exception_adder u_exception_adder (
+        .a(a),
+        .b(b),
+        .round(round),
+        .overflow(overflow_flag),
+        .underflow(underflow_flag),
+        .inexact_bit(inexact_bit),
+        .z_calc(z_calc),
+        .result(result),
+        .zero_f(zero_f),
+        .inf_f(inf_f),
+        .nan_f(nan_f),
+        .tiny_f(tiny_f),
+        .huge_f(huge_f),
+        .inexact_f(inexact_f)
+    );
+
+    assign status = {1'b0, 1'b0, inexact_f, huge_f, tiny_f, nan_f, inf_f, zero_f};
 
 endmodule
