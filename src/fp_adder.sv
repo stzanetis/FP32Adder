@@ -35,4 +35,15 @@ module fp_adder (
         .result_mant(result_mant)
     );
 
+    // Truncation and normalization stage
+    logic [8:0] norm_exp;
+    logic [26:0] norm_mant;
+
+    norm_adder u_norm_adder (
+        .max_exp(max_exp),
+        .result_mant(result_mant),
+        .norm_exp(norm_exp),
+        .norm_mant(norm_mant)
+    );
+
 endmodule
