@@ -85,9 +85,9 @@ module exception_adder import round_pkg::*; (
             
             {INF, INF}: begin
                 if (a[31] != b[31]) begin
-                    // +INF + -INF -> NaN
-                    result = {1'b0, 8'hFF, 23'h400000}; 
-                    nan_f = 1'b1;
+                    // +INF + -INF -> NaN, but compliance-0 treats NaN as +INF
+                    result = {1'b0, z_num(INF)};
+                    nan_f = 1'b1;   // invalid operation flag stays set
                 end else begin
                     result = {a[31], z_num(INF)};
                     inf_f = 1'b1;
