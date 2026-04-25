@@ -1,0 +1,185 @@
+\documentclass[12pt]{report}
+
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{subfig}
+\usepackage{float}
+\usepackage{pgfplots}
+
+\geometry{a4paper, margin=1in}
+\pgfplotsset{compat=1.18}
+
+\lstdefinestyle{bashstyle}{
+    language=bash,
+    basicstyle=\ttfamily\small,
+    backgroundcolor=\color{black!5},
+    frame=single,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{green!50!black},
+    morekeywords={vlog,vsim,run},
+    alsoletter={-},
+    breaklines=true,
+    showstringspaces=false,
+    columns=fullflexible
+}
+
+\begin{document}
+
+\title{\textbf{Low-Level HW Digital Systems II} \newline Assignment Report}
+\author{\textbf{Savvas Tzanetis} \\ 10889}
+\maketitle
+
+\tableofcontents
+\chapter{Introduction}
+This report documents the design and verification of a single precision, 32-bit floating point adder based on IEEE-754. This project was created as an assignment in the \textbf{Low-Level HW Digital Systems II} class of the Aristotle University's Electrical and Computer Engineering department. The code for this project is available at this \textcolor{blue}{\href{https://github.com/stzanetis/FP32Adder}{GitHub repository}} page. \\
+
+\noindent The adder is implemented using the \textit{SystemVerilog} language, using a testbench as well as \textit{SystemVerilog Assertions}, in order to verify the correct functionality of the design. More specifically, the design is in compliance with the IEEE Level 0 standard, meaning denormal inputs are treated as \textit{±zero} and \textit{NaN} inputs are treated as \textit{±infinity}. \\
+
+\noindent The main module of the design is \lstinline{fp_adder.sv}, which is wrapped by \lstinline{fp_adder_top}, and holds the input and output registers. The main module instantiates six sub-modules in a seven-stage pipeline:
+
+\begin{itemize}
+    \item Sign Calculation
+    \item Exponent Calculation
+    \item Mantissa Addition and Alignment
+    \item Truncation and Normalization
+    \item Rounding
+    \item Post-round Normalization
+    \item Exception Handling
+\end{itemize}
+
+\noindent with sign calculation and post-round normalization performed inline.
+
+\chapter{Circuit Design}
+
+\section{Sign Calculation}
+In the first stage of the adder, the sign of the result is calculated. This is computed combinationally inside the main module by comparing the magnitudes of the two operands as seen in the following code.
+
+\hspace{10pt}
+
+\begin{lstlisting}[style=bashstyle]
+sign = (a[31] == b[31]) ? a[31] : ((a[30:0] > b[30:0]) ? a[31] : b[31]);
+\end{lstlisting}
+
+\hspace{10pt}
+
+\noindent If the signs of \textit{a} and \textit{b} are equal the resulting sign will be the same as either operand. Alternatively, the sign is taken from the operand with the greater unsigned magnitude. As noted in the coursework's requirements, in most adders another input signal functioning as the operand should used to define the type of operation, but for simplicity, in this design we only consider that subtraction is done when the two operands have different 
+signs.
+
+\section{Exponent Calculation Module}
+In the next stage of the adder, the difference between the exponents of the two floating numbers is caclulated. In more detail, the exponent calculation module, takes the two 8-bit biased exponents extracted from \lstinline{a[30:23]} and \lstinline{b[30:23]} as inputs and produces the following outputs:
+
+\begin{itemize}
+    \item \textbf{\lstinline{max_exp}:} The larger of the two exponents, serving as the starting exponent of the result before any normalization adjustments.
+    \item \textbf{\lstinline{exp_diff}:} The absolute difference between the two exponents.
+    \item \textbf{\lstinline{sign_exp_diff}:} A flag that is set to 1 when \lstinline{exp_a > exp_b}. This is later passed to the mantissa calculation module to indicate which operand is the smaller one in order to perform the necessary right-shift during alignment.
+\end{itemize}
+
+\newpage
+\noindent The following code shows how this process was implemented:
+
+\hspace{10pt}
+
+\begin{lstlisting}[style=bashstyle]
+assign sign_exp_diff = (exp_a > exp_b);
+assign max_exp       = sign_exp_diff ? exp_a : exp_b;
+assign exp_diff      = sign_exp_diff ? ({1'b0, exp_a} - {1'b0, exp_b}) : ({1'b0, exp_b} - {1'b0, exp_a});
+\end{lstlisting}
+
+\section{Mantissa Calculation Module} \label{mantissa-calc-module}
+The mantissa calculation module is responsible for two steps in the adder's implementation, the mantissa alignment, as well as the addition and subtraction on the two operands mantissas. The output of this module is a 27-bit mantissa resulted from the aforementioned operations.
+
+\subsection{Alignment}
+Both mantissas arrive inside the module as 24-bit values, composed of the 23 fraction bits and a implicit 1 that is added in the main module. During the alignment process, the operand with the smaller exponent is right-shifted by $N$ positions, where $N$ is equal to the difference between the two operands, calculated during the previous step. This shifting process has a critical design concern that is taken into consideration in this design, this operation may cause the loss of information (bits), affecting the adder's rounding accuracy. To combat this, the smaller of the two mantissas is placed in the upper half of a 49-bit intermediate signal, during the operation:
+
+\hspace{10pt}
+
+\begin{lstlisting}[style=bashstyle]
+logic [48:0] shift_in;
+logic [48:0] shifted_val;
+assign shift_in = {mant_smaller, 25'b0};
+assign shifted_val = shift_in >> d;
+\end{lstlisting}
+
+\hspace{10pt}
+
+\noindent After the shift three extra precision bits are extracted from the lower portion of of the shifted value, the \textit{Guard} bit, the \textit{Round} bit as well as the \textit{Sticky} bit. These three bits, called GRS bits, are essential for correct rounding in later stages. \\
+
+\noindent Finally, the aligned smaller mantissa is consisted of the aforementioned shifted value, in addition to the GRS bits and is 27-bit long. The larger mantissa is similarly widened to 27 bits by being padded with three zeros at the LSB end.
+
+\subsection{Addition}
+After alignment, all that is left is the addition, or subtraction in the case of different signs, of the two mantissas. Since  the sign has already been resolved in the first stage, subtraction always removes the smaller significant from the larger one, guaranteeing a positive result.
+ 
+\section{Normalization Module}
+The IEEE-754 standard requires that the mantissa of the resulting floating point number is in a normalized form, and more specifically that exactly one non-zero bit to be added to the left of the binary point. The normalization module, handles this exact logic.
+
+\noindent While implementing this logic, the case where a result is $< 1$ must be handled by being left-shifted. For this, a helper module was implemented, the \textit{Leading Zero Counter}, which is responsible for outputing a 5-bit count of leading zeroes from the 28-bit input mantissa from \ref{mantissa-calc-module}, by scanning from the most significant bit downwards using a loop.
+
+\noindent The normalization itself is later handled with the following four cases:
+\begin{itemize}
+    \item \textbf{Result is Zero}: Occurring after an exact cancellation of the equal, with opposite sign, operands
+    \item \textbf{Bit 27 is Set}: Where the mantissa must be right-shifted by one position and the exponent incremented by one
+    \item \textbf{Bit 26 is Set, Bit 27 is Clear}: Where the mantissa is already in the correct normalized form and can be passed through unchanged
+    \item \textbf{Bits 26 and 27 are Clear}: Where a left shift is needed to push the leading 1 into bit 26. The required shift amount is the number of leading zeroes calculated in the LZC module, minus 1, since LZC counts from bit 27 while the target position is bit 26. 
+\end{itemize}
+
+\noindent During the operation of the last case, exponent underflow must be avoided. This is guarded explicitly:
+
+\hspace{10pt}
+
+\begin{lstlisting}[style=bashstyle]
+if ({1’b0, max_exp} > {4’b0, shift_amt})
+    norm_exp = {1’b0, max_exp}- {4’b0, shift_amt};
+else
+    norm_exp = 9’d0;
+\end{lstlisting}
+
+\section{Rounding Module}
+The rounding module accepts the 26-bit normalized mantissa, the 3-bit rounding mode, and the calculated sign bit, producing a 25-bit rounded mantissa and an inexact flag. This is achieved using the \lstinline{round_pkg} package which defines the rounding mode enumerations. The five supported rounding modes are listed below in Table \ref{fig:rounding_modes}:
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\linewidth]{assets/rounding_modes.png}
+    \caption{Rounding Types}
+    \label{fig:rounding_modes}
+\end{figure}
+
+\section{Post-round Normalization}
+After all of the above steps are taken, a post-rounding normalization occurs, which is implemented inside the adder's main module. This prevents the rare case where a during the rounding process, the mantissa incrementation can cause an overflow. In such a case, this is fixed with a single right-shift, in addition to incrementing the exponent by $1$. \\
+
+\noindent During this stage, the case of either an overflow or underflow occurring in the final exponent is detected. The intermediate result \lstinline{z_calc} is then assembled.
+
+\section{Exception Module}
+The final stage, the exception handling stage, was implemented in a separate module as described by the coursework. This part of the implementation is responsible for handling an combination of special values, as well as the overflow/underflow flags.
+
+\chapter{Verification}
+\section{Testbench}
+\section{Assertions}
+\section{Simulation Results}
+
+\begin{lstlisting}[style=bashstyle]
+vlog -sv round_pkg.sv
+vlog -sv exponent_calc.sv mantissa_calc.sv lzc.sv norm_adder.sv
+vlog -sv round_adder.sv exception_adder.sv fp_adder.sv
+vlog -sv HardFloat/source/*.v
+vlog -sv test_status.sv
+vlog -sv tb_adder.sv
+\end{lstlisting}
+
+
+\chapter{Tools and Sources}
+
+For the purposes of this coursework, the following tools where used:
+\begin{enumerate}
+    \item The \textbf{System Verilog} programming language.
+    \item \textbf{GitHub} for version control.
+    \item \textbf{Intel Questa} for compilation and verification
+\end{enumerate}
+
+\href{https://standards.ieee.org/ieee/754/6210/}{IEEE-754 2019}
+
+\end{document}  
