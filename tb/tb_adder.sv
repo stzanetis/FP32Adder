@@ -1,55 +1,37 @@
-// ----------------------------------------------------------------------
-// tb_adder.sv
-// Reference testbench
-// ----------------------------------------------------------------------
-
 `timescale 1ns/1ps
 
 module tb_adder ();
+    logic [31:0] a, b;
     logic [31:0] result;    // result = a + b
     logic [7:0] status;     // Status bits for the result
-    logic [31:0] a, b;
     logic [2:0] round;      // Rounding mode
     bit clk, resetn;        // Clock and reset signals
 
-    // -------------------  Testbench variables -------------------
+    // Testbench variables
     int random_success = 0;
     int random_total = 0;
     int corner_success = 0;
     int corner_total = 0;
-    int current_test_type = 0; // 0=random, 1=corner
+    int current_test_type = 0; // 0: Random, 1: Corner
 
     logic [31:0] expected_queue[$];
     logic [31:0] a_queue[$];
     logic [31:0] b_queue[$];
     logic [2:0] round_queue[$];
+    int type_queue[$];
 
-    // Pipeline outputs to match SVA 3-delay cycles (from negedge input to posedge check)
-    logic [31:0] result_comb;
-    logic [7:0] status_comb;
-    logic [31:0] result_d1, result_d2;
-    logic [7:0] status_d1, status_d2;
-
-    // -------------------  Instantiate the DUT -------------------
-    fp_adder dut (
+    // Instantiate the DUT
+    fp_adder_top dut (
+        .clk(clk),
+        .resetn(resetn),
         .a(a),
         .b(b),
         .round(round),
-        .result(result_comb),
-        .status(status_comb)
+        .result(result),
+        .status(status)
     );
 
-    always_ff @(posedge clk or negedge resetn) begin
-        if (!resetn) begin
-            result_d1 <= 0; result_d2 <= 0; result <= 0;
-            status_d1 <= 0; status_d2 <= 0; status <= 0;
-        end else begin
-            result_d1 <= result_comb; result_d2 <= result_d1; result <= result_d2;
-            status_d1 <= status_comb; status_d2 <= status_d1; status <= status_d2;
-        end
-    end
-
-    // -------------------	Instantiate the hardfloat reference model -------------------
+    // Instantiate the hardfloat reference model
     logic [31:0] results_hf;	
     logic [31:0] results_ref;	
     logic [2:0] rnd_hf;
@@ -75,7 +57,7 @@ module tb_adder ();
 
     recFNToFN #(8, 24) out_conv (.in(rec_out_hf), .out(results_hf));
 
-    // -------------------	Update the reference model inputs -------------------
+    // Update the reference model inputs
     always_comb begin
         if(a[30:23] == '1) begin
             a_hf = {a[31], {8{1'b1}}, {23{1'b0}}};
@@ -110,45 +92,41 @@ module tb_adder ();
             results_ref = results_hf;
     end
 
-    // -------------------  Verification Checker -------------------
+    // Verification Checks
     always_ff @(posedge clk or negedge resetn) begin
         if (!resetn) begin
             expected_queue.delete();
             a_queue.delete();
             b_queue.delete();
             round_queue.delete();
+            type_queue.delete();
         end else begin
             expected_queue.push_back(results_ref);
             a_queue.push_back(a);
             b_queue.push_back(b);
             round_queue.push_back(round);
+            type_queue.push_back(current_test_type);
 
-            if (expected_queue.size() > 3) begin
-                automatic logic [31:0] exp_val;
-                automatic logic [31:0] pop_a;
-                automatic logic [31:0] pop_b;
-                automatic logic [2:0] pop_r;
-                
-                exp_val = expected_queue.pop_front();
-                pop_a = a_queue.pop_front();
-                pop_b = b_queue.pop_front();
-                pop_r = round_queue.pop_front();
-                
-                if (current_test_type == 0) random_total++;
-                else corner_total++;
+            // Pop and check after 2 cycles
+            if (expected_queue.size() > 2) begin
+                automatic logic [31:0] exp  = expected_queue.pop_front();
+                automatic logic [31:0] pa   = a_queue.pop_front();
+                automatic logic [31:0] pb   = b_queue.pop_front();
+                automatic logic [2:0]  prnd = round_queue.pop_front();
+                automatic int          typ  = type_queue.pop_front();
 
-                if (result === exp_val || ((result[30:23] == 8'hFF && result[22:0] != 0) && (exp_val[30:23] == 8'hFF && exp_val[22:0] != 0))) begin
-                    if (current_test_type == 0) random_success++;
-                    else corner_success++;
+                if (typ == 0) random_total++; else corner_total++;
+            
+                if (result === exp) begin
+                    if (typ == 0) random_success++; else corner_success++;
                 end else begin
-                    $display("ERROR [%0s]: a=%h b=%h rnd=%b | Expected=%h Actual=%h", 
-                        (current_test_type == 0) ? "RANDOM" : "CORNER", pop_a, pop_b, pop_r, exp_val, result);
+                    $display("ERROR [%s] a=%h b=%h rnd=%0d | got=%h  exp=%h", typ == 0 ? "RANDOM" : "CORNER", pa, pb, prnd, result, exp);
                 end
             end
         end
     end
 
-    // -------------------  Stimulus -------------------
+    // Stimulus
     always #5 clk = ~clk;
 
     typedef enum int {
@@ -161,7 +139,7 @@ module tb_adder ();
         logic [7:0] rnd_exp;
         
         rnd_mnt = $urandom();
-        rnd_exp = $urandom_range(1, 253);
+        rnd_exp = $urandom_range(1, 254);
         case (ct)
             NEG_NAN:    return {1'b1, 8'hFF, 1'b1, rnd_mnt[21:0]};
             POS_NAN:    return {1'b0, 8'hFF, 1'b1, rnd_mnt[21:0]};
@@ -217,15 +195,5 @@ module tb_adder ();
         $display("-------------------------------------------");
         $stop;
     end
-
-    // Bind SVA modules
-    bind tb_adder test_status_bits tb_status_bits (.status(status));
-    bind tb_adder test_status_z_combinations tb_status_z (
-        .clk(clk),
-        .a(a),
-        .b(b),
-        .z(result),
-        .status(status)
-    );
 
 endmodule

@@ -1,9 +1,9 @@
 module round_adder import round_pkg::*; (
     input round_mode round,             // Rounding mode
-    input logic [26:0] norm_mant,       // Normalized mantissa (including guard, round, and sticky bits)
+    input logic [26:0] norm_mant,       // Normalized mantissa with GRS bits
     input logic z_sign,                 // Zero sign (1 if the result is zero and should be negative, 0 otherwise)
 
-    output logic [24:0] rounded_mant,   // Rounded mantissa (including implicit leading 1 and overflow bit)
+    output logic [24:0] rounded_mant,   // Rounded mantissa with leading 1 and overflow bit
     output logic inexact_bit            // Inexact bit (1 if rounding caused a loss of precision, 0 otherwise)
 );
     logic [23:0] mant_unrounded;
@@ -11,7 +11,7 @@ module round_adder import round_pkg::*; (
     logic round_up;
     logic tie;
 
-    assign mant_unrounded = {1'b1, norm_mant[25:3]};
+    assign mant_unrounded = {norm_mant[26], norm_mant[25:3]};
     assign g = norm_mant[2];
     assign r = norm_mant[1];
     assign s = norm_mant[0];

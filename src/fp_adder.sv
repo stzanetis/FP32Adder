@@ -27,8 +27,8 @@ module fp_adder (
 
     mantissa_calc u_mant_calc (
         .exp_diff(exp_diff),
-        .mant_a({1'b1, a[22:0]}),   // Implicit leading 1
-        .mant_b({1'b1, b[22:0]}),   // Implicit leading 1
+        .mant_a({(a[30:23] != 8'h00), a[22:0]}),
+        .mant_b({(b[30:23] != 8'h00), b[22:0]}),
         .sign_exp_diff(sign_exp_diff),
         .sa(a[31]),
         .sb(b[31]),
@@ -76,10 +76,10 @@ module fp_adder (
     logic overflow_flag;
     logic underflow_flag;
 
-    // Overflow occurs if the exponent reaches 255 or above (since 255 is reserved for Inf/NaN) and is positive (bit 8 is 0)
+    // Overflow occurs if the exponent reaches 255 or above and is positive
     assign overflow_flag = (final_exp >= 9'd255) && (final_exp[8] == 1'b0);
 
-    // Underflow occurs if the exponent is <= 0. Since final_exp is 9 bits, bit 8 indicates a negative number in 2's complement.
+    // Underflow occurs if the exponent is <= 0. Since final_exp is 9 bits, bit 8 indicates a negative number
     assign underflow_flag = (final_exp == 9'd0) || (final_exp[8] == 1'b1);
 
     logic [31:0] z_calc;

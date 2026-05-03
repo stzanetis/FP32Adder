@@ -14,10 +14,10 @@ module mantissa_calc (
     
     always_comb begin
         if (sign_exp_diff) begin
-            mant_larger = mant_a;
+            mant_larger  = mant_a;
             mant_smaller = mant_b;
         end else begin
-            mant_larger = mant_b;
+            mant_larger  = mant_b;
             mant_smaller = mant_a;
         end
     end
@@ -25,13 +25,13 @@ module mantissa_calc (
     // The intermediate signal of 49-bits
     logic [48:0] shift_in;
     logic [48:0] shifted_val;
-    assign shift_in = {mant_smaller, 25'b0};
+    assign shift_in    = {mant_smaller, 25'b0};
     assign shifted_val = shift_in >> d;
 
     // GRS bits extraction
     logic guard, round, sticky;
-    assign guard = shifted_val[24];
-    assign round = shifted_val[23];
+    assign guard  = shifted_val[24];
+    assign round  = shifted_val[23];
     assign sticky = (|shifted_val[22:0]) | (d > 9'd48);
 
     // 27-bit aligned mantissas
