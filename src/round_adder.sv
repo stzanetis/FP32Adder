@@ -1,5 +1,5 @@
 module round_adder import round_pkg::*; (
-    input round_mode round,             // Rounding mode
+    input logic [2:0] round,            // Rounding mode
     input logic [26:0] norm_mant,       // Normalized mantissa with GRS bits
     input logic z_sign,                 // Zero sign (1 if the result is zero and should be negative, 0 otherwise)
 
@@ -21,7 +21,7 @@ module round_adder import round_pkg::*; (
 
     always_comb begin
         round_up = 1'b0;
-        case (round)
+        case (round_mode'(round))
             IEEE_near: begin
                 if (g && (r || s || mant_unrounded[0]))
                     round_up = 1'b1;

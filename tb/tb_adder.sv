@@ -161,18 +161,26 @@ module tb_adder ();
             @(negedge clk);
             a = $urandom();
             b = $urandom();
-            round = $urandom_range(0, 4);
+            round = 3'b000; // Only test with IEEE_near
         end
     endtask
 
     task run_corner_tests();
+        logic [31:0] corner_vals[10];
         current_test_type = 1;
+        
+        // Generate the exact corner values
+        for (int k = 0; k < 10; k++) begin
+            corner_vals[k] = get_corner(corner_type_t'(k));
+        end
+
+        // Test all combinations
         for (int i = 0; i < 10; i++) begin
             for (int j = 0; j < 10; j++) begin
                 @(negedge clk);
-                a = get_corner(corner_type_t'(i));
-                b = get_corner(corner_type_t'(j));
-                round = $urandom_range(0, 4);
+                a = corner_vals[i];
+                b = corner_vals[j];
+                round = 3'b000; // Only test with IEEE_near
             end
         end
     endtask

@@ -1,7 +1,7 @@
 module exception_adder import round_pkg::*; (
     input  logic [31:0] a,
     input  logic [31:0] b,
-    input  round_mode round,
+    input  logic [2:0] round,
     input  logic overflow,
     input  logic underflow,
     input  logic inexact_bit,
